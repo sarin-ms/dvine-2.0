@@ -1,11 +1,25 @@
-'use client';
+"use client";
 
-import React, { useEffect, useRef, useState, useLayoutEffect, type CSSProperties, type ReactNode } from 'react';
-import { animate, motion, useMotionValue, useMotionValueEvent, useReducedMotion, useTransform } from 'motion/react';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { ArrowRight02Icon, Tick02Icon } from '@hugeicons/core-free-icons';
+import React, {
+  useEffect,
+  useRef,
+  useState,
+  useLayoutEffect,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
+import {
+  animate,
+  motion,
+  useMotionValue,
+  useMotionValueEvent,
+  useReducedMotion,
+  useTransform,
+} from "motion/react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { ArrowRight02Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 
-export type SlideCommitPhase = 'idle' | 'pending' | 'done' | 'error';
+export type SlideCommitPhase = "idle" | "pending" | "done" | "error";
 
 export interface SlideCommitProps {
   label?: ReactNode;
@@ -27,6 +41,7 @@ export interface SlideCommitProps {
   landingDip?: number;
   holdMs?: number;
   disabled?: boolean;
+  disabledReason?: string;
   icon?: ReactNode;
   className?: string;
 }
@@ -52,14 +67,17 @@ const STYLE = `
 }
 `;
 
-const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+const clamp = (value: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, value));
 const onColor = (hex: string) => {
-  const raw = hex.replace('#', '');
-  const full = raw.length === 3 ? [...raw].map(ch => ch + ch).join('') : raw.slice(0, 6);
+  const raw = hex.replace("#", "");
+  const full =
+    raw.length === 3 ? [...raw].map((ch) => ch + ch).join("") : raw.slice(0, 6);
   const n = parseInt(full, 16);
-  if (Number.isNaN(n)) return '#ffffff';
-  const yiq = (((n >> 16) & 255) * 299 + ((n >> 8) & 255) * 587 + (n & 255) * 114) / 1000;
-  return yiq >= 128 ? '#111111' : '#ffffff';
+  if (Number.isNaN(n)) return "#ffffff";
+  const yiq =
+    (((n >> 16) & 255) * 299 + ((n >> 8) & 255) * 587 + (n & 255) * 114) / 1000;
+  return yiq >= 128 ? "#111111" : "#ffffff";
 };
 const velocityOf = (hist: Sample[]) => {
   if (hist.length < 2) return 0;
@@ -68,27 +86,48 @@ const velocityOf = (hist: Sample[]) => {
   return ((x1 - x0) / Math.max(1, t1 - t0)) * 1000;
 };
 const finePointer = () =>
-  typeof window !== 'undefined' && !!window.matchMedia?.('(hover: hover) and (pointer: fine)').matches;
+  typeof window !== "undefined" &&
+  !!window.matchMedia?.("(hover: hover) and (pointer: fine)").matches;
 
 const Spinner = ({ size }: { size: number }) => (
-  <svg className="sc-spinner block" width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
-    <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="2.4" strokeOpacity="0.25" />
-    <path d="M12 3a9 9 0 0 1 9 9" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+  <svg
+    className="sc-spinner block"
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    aria-hidden="true"
+  >
+    <circle
+      cx="12"
+      cy="12"
+      r="9"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeOpacity="0.25"
+    />
+    <path
+      d="M12 3a9 9 0 0 1 9 9"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+    />
   </svg>
 );
 
 export const SlideCommit: React.FC<SlideCommitProps> = ({
-  label = 'Slide to pay',
-  doneLabel = 'Processing...',
+  label = "Slide to pay",
+  doneLabel = "Processing...",
   doneIcon,
-  errorLabel = 'Payment failed',
+  errorLabel = "Payment failed",
   onConfirm,
   onDone,
   onError,
-  trackColor = '#0b0f19',
-  handleColor = '#ffffff',
-  successColor = '#0284c7',
-  dangerColor = '#f43f5e',
+  trackColor = "#0b0f19",
+  handleColor = "#ffffff",
+  successColor = "#0284c7",
+  dangerColor = "#f43f5e",
   width,
   height = 54,
   radius,
@@ -97,11 +136,12 @@ export const SlideCommit: React.FC<SlideCommitProps> = ({
   landingDip = 0.026,
   holdMs = 1500,
   disabled = false,
+  disabledReason,
   icon,
-  className = ''
+  className = "",
 }) => {
   const reduce = useReducedMotion();
-  const [phase, setPhase] = useState<SlideCommitPhase>('idle');
+  const [phase, setPhase] = useState<SlideCommitPhase>("idle");
   const [held, setHeld] = useState(false);
   const [hot, setHot] = useState(false);
 
@@ -110,15 +150,20 @@ export const SlideCommit: React.FC<SlideCommitProps> = ({
   const capsuleRef = useRef<HTMLDivElement>(null);
   const grip = useRef<Grip | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const homeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const homeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
   const run = useRef(0);
   const unwatch = useRef<(() => void) | null>(null);
-  const live = useRef<{ move: (e: MoveEvent) => void; up: (e: UpEvent) => void }>({ move: () => {}, up: () => {} });
+  const live = useRef<{
+    move: (e: MoveEvent) => void;
+    up: (e: UpEvent) => void;
+  }>({ move: () => {}, up: () => {} });
   const lastPercent = useRef(0);
 
   // Auto-measure width from container so it matches perfectly regardless of layout
   const [measuredWidth, setMeasuredWidth] = useState<number>(
-    typeof width === 'number' && width > 0 ? width : 300
+    typeof width === "number" && width > 0 ? width : 300,
   );
 
   const updateFromEl = () => {
@@ -141,7 +186,7 @@ export const SlideCommit: React.FC<SlideCommitProps> = ({
     updateFromEl();
 
     let ro: ResizeObserver | null = null;
-    if (typeof ResizeObserver !== 'undefined') {
+    if (typeof ResizeObserver !== "undefined") {
       ro = new ResizeObserver((entries) => {
         for (const entry of entries) {
           const w = entry.contentRect.width;
@@ -153,10 +198,10 @@ export const SlideCommit: React.FC<SlideCommitProps> = ({
       ro.observe(el);
     }
 
-    window.addEventListener('resize', updateFromEl);
+    window.addEventListener("resize", updateFromEl);
     return () => {
       ro?.disconnect();
-      window.removeEventListener('resize', updateFromEl);
+      window.removeEventListener("resize", updateFromEl);
     };
   }, []);
 
@@ -177,8 +222,16 @@ export const SlideCommit: React.FC<SlideCommitProps> = ({
   const k = 260 + (clamp(speed, 0, 100) / 100) * 640;
   const mass = 0.9;
   const critical = 2 * Math.sqrt(k * mass);
-  const commitSpring = { type: 'spring' as const, stiffness: k, damping: critical, mass };
-  const homeSpring = { ...commitSpring, damping: critical * (1 - clamp(returnBounce, 0, 0.5)) };
+  const commitSpring = {
+    type: "spring" as const,
+    stiffness: k,
+    damping: critical,
+    mass,
+  };
+  const homeSpring = {
+    ...commitSpring,
+    damping: critical * (1 - clamp(returnBounce, 0, 0.5)),
+  };
 
   const x = useMotionValue(0);
   const anchor = useMotionValue(0);
@@ -187,33 +240,50 @@ export const SlideCommit: React.FC<SlideCommitProps> = ({
   const pulse = useMotionValue(1);
   const shake = useMotionValue(0);
 
-  const seen = useTransform(x, v => clamp(v, 0, travelRef.current));
-  const edge = useTransform([seen, anchor], ([v, a]: number[]) => v + GRIP + clamp(a - v, 0, travelRef.current));
-  
-  // Clip is rounded pill inset computed dynamically from latest measured inner width
-  const clip = useTransform(edge, R => `inset(0 ${Math.max(0, innerRef.current - R)}px 0 0 round ${gripR}px)`);
-  const content = useTransform([seen, edge], ([v, R]: number[]) => `translateX(${(v + R) / 2 - innerRef.current / 2}px)`);
+  const seen = useTransform(x, (v) => clamp(v, 0, travelRef.current));
+  const edge = useTransform(
+    [seen, anchor],
+    ([v, a]: number[]) => v + GRIP + clamp(a - v, 0, travelRef.current),
+  );
 
-  const swell = hot && !held && phase === 'idle' && !reduce ? SWELL : 1;
-  const shape = useTransform(x, v => {
+  // Clip is rounded pill inset computed dynamically from latest measured inner width
+  const clip = useTransform(
+    edge,
+    (R) =>
+      `inset(0 ${Math.max(0, innerRef.current - R)}px 0 0 round ${gripR}px)`,
+  );
+  const content = useTransform(
+    [seen, edge],
+    ([v, R]: number[]) => `translateX(${(v + R) / 2 - innerRef.current / 2}px)`,
+  );
+
+  const swell = hot && !held && phase === "idle" && !reduce ? SWELL : 1;
+  const shape = useTransform(x, (v) => {
     const q = 1 - Math.min(SQUASH_MAX, Math.max(0, -v) / SQUASH_DIV);
     return `scale(${q * swell}, ${swell / q})`;
   });
-  const origin = useTransform(seen, v => `${v + GRIP / 2}px 50%`);
+  const origin = useTransform(seen, (v) => `${v + GRIP / 2}px 50%`);
   const say = useTransform(seen, [0, TRAVEL * 0.5], [1, 0]);
   const arrow = useTransform(
     [seen, shown],
-    ([v, on]: number[]) => on * clamp(1 - (v - TRAVEL * 0.5) / (TRAVEL * 0.35), 0, 1)
+    ([v, on]: number[]) =>
+      on * clamp(1 - (v - TRAVEL * 0.5) / (TRAVEL * 0.35), 0, 1),
   );
-  const trackTransform = useTransform([shake, pulse], ([s, p]: number[]) => `translateX(${s}px) scale(${p})`);
+  const trackTransform = useTransform(
+    [shake, pulse],
+    ([s, p]: number[]) => `translateX(${s}px) scale(${p})`,
+  );
 
-  const labelText = typeof label === 'string' ? label : 'Slide to confirm';
-  useMotionValueEvent(seen, 'change', v => {
+  const labelText = typeof label === "string" ? label : "Slide to confirm";
+  useMotionValueEvent(seen, "change", (v) => {
     const percent = Math.round((v / TRAVEL) * 100);
     if (percent === lastPercent.current || !capsuleRef.current) return;
     lastPercent.current = percent;
-    capsuleRef.current.setAttribute('aria-valuenow', String(percent));
-    capsuleRef.current.setAttribute('aria-valuetext', `${labelText}, ${percent}%`);
+    capsuleRef.current.setAttribute("aria-valuenow", String(percent));
+    capsuleRef.current.setAttribute(
+      "aria-valuetext",
+      `${labelText}, ${percent}%`,
+    );
   });
 
   useEffect(
@@ -223,7 +293,7 @@ export const SlideCommit: React.FC<SlideCommitProps> = ({
       unwatch.current?.();
       run.current += 1;
     },
-    []
+    [],
   );
 
   const local = (clientX: number) => {
@@ -238,21 +308,26 @@ export const SlideCommit: React.FC<SlideCommitProps> = ({
   };
 
   const settle = () => {
-    setPhase('idle');
+    setPhase("idle");
     animate(shown, 1, { duration: 0.2, delay: 0.12 });
     if (reduce) anchor.set(0);
-    else animate(anchor, 0, { type: 'spring', duration: 0.3, bounce: 0 });
+    else animate(anchor, 0, { type: "spring", duration: 0.3, bounce: 0 });
   };
 
   const resolve = (viaKey: boolean) => {
-    setPhase('done');
+    setPhase("done");
     anchor.set(x.get());
     animate(spin, 0, { duration: 0.12 });
     if (reduce) x.set(0);
     else {
       animate(x, 0, commitSpring);
       if (!viaKey && landingDip > 0) {
-        animate(pulse, [1, 1 - landingDip, 1], { duration: 0.46, times: [0, 0.62, 1], ease: EASE_OUT, delay: 0.1 });
+        animate(pulse, [1, 1 - landingDip, 1], {
+          duration: 0.46,
+          times: [0, 0.62, 1],
+          ease: EASE_OUT,
+          delay: 0.1,
+        });
       }
     }
     onDone?.();
@@ -260,7 +335,7 @@ export const SlideCommit: React.FC<SlideCommitProps> = ({
   };
 
   const reject = (reason: unknown) => {
-    setPhase('error');
+    setPhase("error");
     onError?.(reason);
     animate(spin, 0, { duration: 0.12 });
     animate(shown, 1, { duration: 0.2, delay: 0.12 });
@@ -271,7 +346,7 @@ export const SlideCommit: React.FC<SlideCommitProps> = ({
         if (!grip.current) goHome(0);
       }, 300);
     }
-    timer.current = setTimeout(() => setPhase('idle'), Math.max(holdMs, 1500));
+    timer.current = setTimeout(() => setPhase("idle"), Math.max(holdMs, 1500));
   };
 
   const commit = (viaKey: boolean) => {
@@ -285,13 +360,13 @@ export const SlideCommit: React.FC<SlideCommitProps> = ({
       reject(reason);
       return;
     }
-    const pending = out && typeof out.then === 'function' ? out : null;
+    const pending = out && typeof out.then === "function" ? out : null;
     if (!pending) {
       animate(shown, 0, { duration: 0.12 });
       resolve(viaKey);
       return;
     }
-    setPhase('pending');
+    setPhase("pending");
     animate(shown, 0, { duration: 0.2 });
     animate(spin, 1, { duration: 0.2 });
     const t0 = performance.now();
@@ -300,12 +375,12 @@ export const SlideCommit: React.FC<SlideCommitProps> = ({
         () => {
           if (id === run.current) fn();
         },
-        Math.max(0, MIN_PENDING - (performance.now() - t0))
+        Math.max(0, MIN_PENDING - (performance.now() - t0)),
       );
     };
     pending.then(
       () => later(() => resolve(viaKey)),
-      reason => later(() => reject(reason))
+      (reason) => later(() => reject(reason)),
     );
   };
 
@@ -313,11 +388,20 @@ export const SlideCommit: React.FC<SlideCommitProps> = ({
     // If disabled, give interactive shake feedback so user knows it requires checkboxes!
     if (disabled) {
       animate(shake, SHAKE, { duration: 0.45, ease: EASE_OUT });
-      onError?.("Please confirm your information above to unlock slider");
+      onError?.(
+        disabledReason ||
+          "Please confirm your information and verify email to unlock",
+      );
       return;
     }
 
-    if (grip.current || phase === 'pending' || phase === 'done' || e.button !== 0) return;
+    if (
+      grip.current ||
+      phase === "pending" ||
+      phase === "done" ||
+      e.button !== 0
+    )
+      return;
     x.stop();
 
     const at = local(e.clientX);
@@ -325,7 +409,12 @@ export const SlideCommit: React.FC<SlideCommitProps> = ({
     // Grab offset relative to current handle position
     const grabOffset = clamp(at - currentX, 0, GRIP);
 
-    grip.current = { id: e.pointerId, grab: grabOffset, moved: false, hist: [] };
+    grip.current = {
+      id: e.pointerId,
+      grab: grabOffset,
+      moved: false,
+      hist: [],
+    };
     setHeld(true);
 
     try {
@@ -335,13 +424,13 @@ export const SlideCommit: React.FC<SlideCommitProps> = ({
     unwatch.current?.();
     const onMove = (ev: PointerEvent) => ev.isTrusted && live.current.move(ev);
     const onUp = (ev: PointerEvent) => ev.isTrusted && live.current.up(ev);
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-    window.addEventListener('pointercancel', onUp);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
     unwatch.current = () => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      window.removeEventListener('pointercancel', onUp);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
       unwatch.current = null;
     };
   };
@@ -374,20 +463,20 @@ export const SlideCommit: React.FC<SlideCommitProps> = ({
   live.current = { move, up };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (disabled || phase === 'pending' || phase === 'done') return;
+    if (disabled || phase === "pending" || phase === "done") return;
     const step = travelRef.current / 10;
-    if (e.key === 'End') {
+    if (e.key === "End") {
       e.preventDefault();
       commit(true);
-    } else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+    } else if (e.key === "ArrowRight" || e.key === "ArrowUp") {
       e.preventDefault();
       const next = Math.min(travelRef.current, x.get() + step);
       x.set(next);
       if (next >= travelRef.current * 0.85) commit(true);
-    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+    } else if (e.key === "ArrowLeft" || e.key === "ArrowDown") {
       e.preventDefault();
       x.set(Math.max(0, x.get() - step));
-    } else if (e.key === 'Home' || e.key === 'Escape') {
+    } else if (e.key === "Home" || e.key === "Escape") {
       e.preventDefault();
       if (grip.current) up({ pointerId: grip.current.id });
       else x.set(0);
@@ -396,32 +485,32 @@ export const SlideCommit: React.FC<SlideCommitProps> = ({
 
   const fontSize = clamp(Math.round(height * 0.25), 13, 17);
   const iconSize = Math.round(GRIP * 0.44);
-  const done = phase === 'done';
+  const done = phase === "done";
 
   return (
     <div
       ref={rootRef}
       className={`sc-root group relative inline-block align-middle w-full select-none [font-family:inherit] ${
-        disabled ? 'cursor-not-allowed opacity-60' : 'cursor-grab'
-      }${className ? ` ${className}` : ''}`}
+        disabled ? "cursor-not-allowed opacity-60" : "cursor-grab"
+      }${className ? ` ${className}` : ""}`}
       data-phase={phase}
-      data-held={held ? '' : undefined}
-      data-disabled={disabled ? '' : undefined}
+      data-held={held ? "" : undefined}
+      data-disabled={disabled ? "" : undefined}
       style={
         {
-          width: width ?? '100%',
+          width: width ?? "100%",
           height,
-          '--sc-track': trackColor,
-          '--sc-ink': handleColor,
-          '--sc-ok': successColor,
-          '--sc-no': dangerColor,
-          '--sc-on-ink': onColor(handleColor),
-          '--sc-on-ok': onColor(successColor),
-          '--sc-on-no': onColor(dangerColor),
-          '--sc-radius': `${r}px`,
-          '--sc-grip-r': `${gripR}px`,
-          '--sc-pad': `${PAD}px`,
-          '--sc-font': `${fontSize}px`
+          "--sc-track": trackColor,
+          "--sc-ink": handleColor,
+          "--sc-ok": successColor,
+          "--sc-no": dangerColor,
+          "--sc-on-ink": onColor(handleColor),
+          "--sc-on-ok": onColor(successColor),
+          "--sc-on-no": onColor(dangerColor),
+          "--sc-radius": `${r}px`,
+          "--sc-grip-r": `${gripR}px`,
+          "--sc-pad": `${PAD}px`,
+          "--sc-font": `${fontSize}px`,
         } as CSSProperties
       }
     >
@@ -455,23 +544,32 @@ export const SlideCommit: React.FC<SlideCommitProps> = ({
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={0}
-          aria-busy={phase === 'pending' || undefined}
+          aria-busy={phase === "pending" || undefined}
           aria-disabled={disabled || undefined}
           className="absolute top-[var(--sc-pad)] left-[var(--sc-pad)] h-[calc(100%-var(--sc-pad)*2)] w-[calc(100%-var(--sc-pad)*2)] outline-none [background:var(--sc-ink)] [color:var(--sc-on-ink)] shadow-[0_2px_8px_rgba(0,0,0,0.5)] [transition:background-color_200ms_ease,color_200ms_ease] group-data-[phase=pending]:[background:var(--sc-ok)] group-data-[phase=pending]:[color:var(--sc-on-ok)] group-data-[phase=done]:[background:var(--sc-ok)] group-data-[phase=done]:[color:var(--sc-on-ok)] group-data-[phase=error]:[background:var(--sc-no)] group-data-[phase=error]:[color:var(--sc-on-no)]"
           style={{ clipPath: clip, transform: shape, transformOrigin: origin }}
-          onPointerEnter={e => {
-            if (e.pointerType === 'mouse' && finePointer()) setHot(true);
+          onPointerEnter={(e) => {
+            if (e.pointerType === "mouse" && finePointer()) setHot(true);
           }}
           onPointerLeave={() => setHot(false)}
           onKeyDown={onKeyDown}
         >
-          <motion.div className="absolute inset-0" style={{ transform: content }}>
+          <motion.div
+            className="absolute inset-0"
+            style={{ transform: content }}
+          >
             <motion.span
               className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 whitespace-nowrap font-semibold leading-none tracking-[-0.006em] [font-size:var(--sc-font)] [transition:filter_200ms_ease] group-data-[phase=pending]:blur-[2px] [&>svg]:block"
               style={{ opacity: arrow }}
               aria-hidden="true"
             >
-              {icon ?? <HugeiconsIcon icon={ArrowRight02Icon} size={iconSize} strokeWidth={2.4} />}
+              {icon ?? (
+                <HugeiconsIcon
+                  icon={ArrowRight02Icon}
+                  size={iconSize}
+                  strokeWidth={2.4}
+                />
+              )}
             </motion.span>
             <motion.span
               className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 whitespace-nowrap font-semibold leading-none tracking-[-0.006em] [font-size:var(--sc-font)] [transition:filter_200ms_ease] blur-[2px] group-data-[phase=pending]:blur-none"
@@ -484,22 +582,36 @@ export const SlideCommit: React.FC<SlideCommitProps> = ({
               className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 whitespace-nowrap font-semibold leading-none tracking-[-0.006em] [font-size:var(--sc-font)] [&>svg]:block text-white"
               aria-hidden="true"
               initial={false}
-              animate={{ opacity: done ? 1 : 0, scale: done || reduce ? 1 : 0.95 }}
+              animate={{
+                opacity: done ? 1 : 0,
+                scale: done || reduce ? 1 : 0.95,
+              }}
               transition={{ duration: 0.2, ease: EASE_OUT }}
             >
               {doneIcon !== undefined ? (
                 doneIcon
-              ) : typeof doneLabel === 'string' && doneLabel.toLowerCase().includes('process') ? (
+              ) : typeof doneLabel === "string" &&
+                doneLabel.toLowerCase().includes("process") ? (
                 <Spinner size={Math.round(GRIP * 0.42)} />
               ) : (
-                <HugeiconsIcon icon={Tick02Icon} size={Math.round(GRIP * 0.42)} strokeWidth={2.5} />
+                <HugeiconsIcon
+                  icon={Tick02Icon}
+                  size={Math.round(GRIP * 0.42)}
+                  strokeWidth={2.5}
+                />
               )}
               <span>{doneLabel}</span>
             </motion.span>
           </motion.div>
         </motion.div>
         <span className="sr-only" aria-live="polite">
-          {phase === 'pending' ? 'Working' : phase === 'done' ? doneLabel : phase === 'error' ? errorLabel : ''}
+          {phase === "pending"
+            ? "Working"
+            : phase === "done"
+              ? doneLabel
+              : phase === "error"
+                ? errorLabel
+                : ""}
         </span>
       </motion.div>
     </div>
