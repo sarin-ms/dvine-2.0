@@ -1,4 +1,4 @@
-export const REGISTRATION_IS_OPEN: boolean = false;
+export const REGISTRATION_IS_OPEN: boolean = true;
 
 export const REGISTRATION_NOTICE = {
   title: "Registration opens soon",
